@@ -278,7 +278,7 @@ depends_on=[
 }
 
 
-// Changing the code and adding the image url in it.
+// Adding cloud front URL .
 
 resource "null_resource" "CodeChange"  {
 depends_on = [
