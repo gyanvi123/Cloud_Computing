@@ -3,11 +3,14 @@ provider "aws" {
   profile = "gyanvi999"
 }
 
+
 // Creating Key
 
 resource "tls_private_key" "tls_key" {
  algorithm = "RSA"
 }
+
+
 
 //Generating Key-Value Pair
 
@@ -20,6 +23,7 @@ depends_on = [
  ]
 }
 
+
 // Saving Private key PEM file
 
 resource "local_file" "key_file" {
@@ -31,6 +35,7 @@ depends_on = [
  aws_key_pair.generated_key
 ]
 }
+
 
 //Creating Security Group
 
@@ -65,6 +70,7 @@ resource "aws_security_group" "firstgroup" {
  }
 }
 
+
 //Creating instance with above created key and securtiy group
 
 resource "aws_instance" "Task1instance" {
@@ -77,6 +83,8 @@ resource "aws_instance" "Task1instance" {
  }
 }
 
+
+
 //Creating new EBS Volume for Task1instance
 
 resource "aws_ebs_volume" "ebs1" {
@@ -87,6 +95,7 @@ resource "aws_ebs_volume" "ebs1" {
    }
 }
 
+
 // To attach the Volume created
 
 resource "aws_volume_attachment" "ebs_attach" {
@@ -96,12 +105,12 @@ resource "aws_volume_attachment" "ebs_attach" {
    force_detach = true
 }
 
+
+
 // For Output
 output "myos_ip" {
   value = aws_instance.Task1instance.public_ip
 }
-
-
 
 resource "null_resource" "nullremote" {
 depends_on = [
@@ -115,6 +124,8 @@ connection{
     private_key = file("D:/SOFTWARE/Terraform/test/task1/gkey1.pem")
     host = aws_instance.Task1instance.public_ip
 }
+
+
 
 // Volume partition, format and mounting 
 
@@ -134,41 +145,45 @@ provisioner "remote-exec"{
   }
 }
 
+
+
 // Creating S3 bucket
 resource "aws_s3_bucket" "gyanvitask1bucket" {
   bucket = "gyanvitask1bucket"
-  acl    = "private"
+  acl    = "public-read"
   tags = {
   Name = "gyanvitask1bucket"
  }
 }
 
-
 // Allow Public Access
-
 resource "aws_s3_bucket_public_access_block" "S3PublicAccess" {
   bucket = "${aws_s3_bucket.gyanvitask1bucket.id}"
-  block_public_acls = true
-  block_public_policy = true
-  restrict_public_buckets = true
+  block_public_acls = false
+  block_public_policy = false
+  restrict_public_buckets = false
 }
 
-// Uploading files to S3 bucket
 
-resource "aws_s3_bucket_object" "bucketObject" {
-   for_each = fileset("C:/Users/KIIT/Pictures/Camera Roll/image", "**/*.jpg")
-   bucket = "${aws_s3_bucket.gyanvitask1bucket.bucket}"
-   key = each.value
-   source = "C:/Users/KIIT/Pictures/Camera Roll/image/${each.value}"
-   content_type = "image/jpg"
+
+//Putting Objects in S3 Bucket
+
+resource "aws_s3_bucket_object" "s3_object" {
+  bucket = "${aws_s3_bucket.gyanvitask1bucket.bucket}"
+  key    = "myyyyy.jpg"
+  source = "D:/image/myyyyy.jpg"
+  acl    = "public-read"
 }
 
 
 //Creating Cloudfront to access images from S3
+
 locals {
- s3_origin_id = "S3Origin"
+ s3_origin_id = aws_s3_bucket.gyanvitask1bucket.id
 }
+
 //Creating Origin Access Identity for CloudFront
+
 resource "aws_cloudfront_origin_access_identity" "origin_access_identity" {
  comment = "gyanvitask1bucket"
 }
@@ -198,7 +213,11 @@ enabled = true
   default_ttl = 3600
   max_ttl = 86400
  }
+
+
 // Cache behavior with precedence 0
+
+
 ordered_cache_behavior {
  path_pattern = "/content/immutable/*"
  allowed_methods = ["GET", "HEAD", "OPTIONS"]
@@ -217,7 +236,10 @@ min_ttl = 0
  compress = true
  viewer_protocol_policy = "redirect-to-https"
 }
+
+
 // Cache behavior with precedence 1
+
 ordered_cache_behavior {
  path_pattern = "/content/*"
  allowed_methods = ["GET", "HEAD", "OPTIONS"]
@@ -255,11 +277,34 @@ depends_on=[
 ]
 }
 
-resource "null_resource" "nulllocal1" {
-depends_on = [null_resource.nullremote4]
-provisioner "local-exec" {
-	    command = "start chrome ${aws_instance.web1.public_ip}"
-   }
+
+// Changing the code and adding the image url in it.
+
+resource "null_resource" "CodeChange"  {
+depends_on = [
+    aws_cloudfront_distribution.Task1CF,
+  ]
+connection {
+    type     = "ssh"
+    user     = "ec2-user"
+    private_key = tls_private_key.tls_key.private_key_pem
+    host     = aws_instance.Task1instance.public_ip
+  }
+  provisioner "remote-exec" {
+    inline = [
+	"echo '<img src='https://${aws_cloudfront_distribution.Task1CF.domain_name}/myyyyy.jpg' width='1280' height='1800'>' | sudo tee -a /var/www/html/myyyyy.html"
+    ]
+  }
+}
+
+// Finally opening the website through chrome browser.
+
+resource "null_resource" "ChromeOpen"  {
+
+
+	provisioner "local-exec" {
+	    command = "chrome  ${aws_instance.Task1instance.public_ip}/myyyyy.html"
+  	}
 }
 
 
